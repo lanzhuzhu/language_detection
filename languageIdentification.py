@@ -1,56 +1,78 @@
 #!/usr/bin/python
-#coding:utf-8
+# coding:utf-8
 
 import random
 from urllib import urlopen
 
+
+class NGram(object):
+    def __init__(self, fn=None, ttype='file', n=3):
+        self.length = None
+        self.n = n
+        self.table = {}
+        if fn is not None:
+            # print fn,ttype
+            self.parseFile(fn, ttype)
+        self.calculate_length()
+
+    def parseFile(self, fn, ttype):
+        chars = ' ' * self.n  # initial sequence of spaces with length n
+        flag = False
+        if ttype == 'link':
+            print "trying to fetch url, may take time..."
+            f = urlopen(fn)
+        elif ttype == 'file':
+            f = open(fn)
+            # print "read file from:%s" % fn
+
+        elif ttype == 'text':
+            f = fn.split('\n')
+            flag = True
+        else:
+            print ttype       
+            print "Forwarded type unknown"
+            return
+
+        for z, line in enumerate(f):
+            for letter in (" ".join(line.strip().split()) + " "):
+                chars = chars[1:] + letter  # append letter to sequence of length n
+                self.table[chars] = self.table.get(chars, 0) + 1  # increment count
+        if not flag:
+            f.close()
+
+    def calculate_length(self):
+        """ Treat the N-Gram table as a vector and return its scalar magnitude
+        to be used for performing a vector-based search.
+        """
+        self.length = sum([x * x for x in self.table.values()]) ** 0.5
+        return self.length
+
+    def __sub__(self, other):
+        """ Find the difference between two NGram objects by finding the cosine
+        of the angle between the two vector representations of the table of
+        N-Grams. Return a float value between 0 and 1 where 0 indicates that
+        the two NGrams are exactly the same.
+        """
+        if not isinstance(other, NGram):
+            raise TypeError("Can't compare NGram with non-NGram object.")
+
+        if self.n != other.n:
+            raise TypeError("Can't compare NGram objects of different size.")
+
+        total = 0
+        for k in self.table:
+            total += self.table[k] * other.table.get(k, 0)
+
+        return 1.0 - (float(total)) / (float(self.length) * float(other.length))
+
+    
+
+
 class Trigram:
-    """From one or more text files, the frequency of three character
-    sequences is calculated.  When treated as a vector, this information
-    can be compared to other trigrams, and the difference between them
-    seen as an angle.  The cosine of this angle varies between 1 for
-    complete similarity, and 0 for utter difference.  Since letter
-    combinations are characteristic to a language, this can be used to
-    determine the language of a body of text. For example:
-
-        >>> reference_en = Trigram('/path/to/reference/text/english')
-        >>> reference_de = Trigram('/path/to/reference/text/german')
-        >>> unknown = Trigram('url://pointing/to/unknown/text')
-        >>> unknown.similarity(reference_de)
-        0.4
-        >>> unknown.similarity(reference_en)
-        0.95
-
-    would indicate the unknown text is almost cetrtainly English.  As
-    syntax sugar, the minus sign is overloaded to return the difference
-    between texts, so the above objects would give you:
-
-        >>> unknown - reference_de
-        0.6
-        >>> reference_en - unknown    # order doesn't matter.
-        0.05
-
-    As it stands, the Trigram ignores character set information, which
-    means you can only accurately compare within a single encoding
-    (iso-8859-1 in the examples).  A more complete implementation might
-    convert to unicode first.
-
-    As an extra bonus, there is a method to make up nonsense words in the
-    style of the Trigram's text.
-
-        >>> reference_en.makeWords(30)
-        My withillonquiver and ald, by now wittlectionsurper, may sequia,
-        tory, I ad my notter. Marriusbabilly She lady for rachalle spen
-        hat knong al elf
-
-    Beware when using urls: HTML won't be parsed out.
-
-    Most methods chatter away to standard output, to let you know they're
-    still there.
-    """
+ 
     length = 0
 
-    def __init__(self, fn=None,ttype='file'):
+    def __init__(self, fn=None, ttype='file'):
         self.lut = {}
         if fn is not None:
             # print fn,ttype
@@ -65,11 +87,10 @@ class Trigram:
         elif ttype == 'file':
             # f = codecs.open(fn,encoding='US-ASCII')
             f = open(fn)
-            print "read file from:%s" % fn
+            # print "read file from:%s" % fn
 
-            
         elif ttype == 'text':
-            f = fn.split('\n') 
+            f = fn.split('\n')
             flag = True
         else:
             print "Forwarded type unknown"
@@ -78,7 +99,8 @@ class Trigram:
             # if not z % 10000:
             #     print "line %s" % z
             # \n's are spurious in a prose context
-            for letter in line.strip() + ' ':
+            # to remove more space
+            for letter in (" ".join(line.strip().split()) + ' '):
                 d = self.lut.setdefault(pair, {})
                 d[letter] = d.get(letter, 0) + 1
                 pair = pair[1] + letter
@@ -86,13 +108,12 @@ class Trigram:
             f.close()
         self.measure()
 
-
     def measure(self):
         """calculates the scalar length of the trigram vector and
         stores it in self.length."""
         total = 0
         for y in self.lut.values():
-            total += sum([ x * x for x in y.values() ])
+            total += sum([x * x for x in y.values()])
         self.length = total ** 0.5
 
     def similarity(self, other):
@@ -120,7 +141,6 @@ class Trigram:
         different, 0 is entirely the same."""
         return 1 - self.similarity(other)
 
-
     def makeWords(self, count):
         """returns a string of made-up words based on the known text."""
         text = []
@@ -132,7 +152,6 @@ class Trigram:
             if n in ' \t':
                 count -= 1
         return ''.join(text)
-
 
     def likely(self, k):
         """Returns a character likely to follow the given string
@@ -148,39 +167,94 @@ class Trigram:
 
 
 class languageDetectionModel:
-    def __init__(self):
-        self.en = Trigram('./english2.txt')
+    def __init__(self,ngram):
+        self.ngram = ngram
+        self.en = NGram('./english2.txt', n=ngram)
         # NB fr and some others have English license text.
         #   no has english excerpts.
-        self.fr = Trigram('./french.txt')
-        self.fi = Trigram('./Finnish.txt')
-        self.no = Trigram('./Norwegian.txt')
-        self.se = Trigram('./Swedish.txt')
-        self.de = Trigram("./German2.txt")
-        self.zh = Trigram("./Chinese2.txt")
-        self.ja = Trigram("./Japanese.txt")
-        self.languageProfile=[self.en,self.fr,self.fi,self.no,self.se,self.de,self.zh,self.ja]
-        self.languageName= ["English","French","Finnish","Norwegian","Swedish","German","Chinese","Japanese"]
+        self.fr = NGram('./french.txt', n=ngram)
+        self.fi = NGram('./Finnish.txt', n=ngram)
+        self.no = NGram('./Norwegian.txt', n=ngram)
+        self.se = NGram('./Swedish.txt', n=ngram)
+        self.de = NGram("./German2.txt", n=ngram)
+        self.zh = NGram("./Chinese2.txt", n=ngram)
+        self.ja = NGram("./Japanese.txt", n=ngram)
+        self.languages = [self.en, self.fr, self.fi, self.no, self.se, self.de, self.zh, self.ja]
+        self.languageName = ["English", "French", "Finnish", "Norwegian", "Swedish", "German", "Chinese", "Japanese"]
 
-    def testInput(self,infile,ttype):
-        unknown = Trigram(infile,ttype=ttype)
+    def find_match(self, input,ttype):
+        unknown = NGram(input, ttype=ttype,n=self.ngram)
         similarity_scores = []
-        for profile in self.languageProfile:
-            similarity_scores.append(profile-unknown)
+
+        for profile in self.languages:
+            similarity_scores.append(profile - unknown)
         reference_score = min(similarity_scores)
         lan = self.languageName[similarity_scores.index(reference_score)]
-        if reference_score<0.2:
-            print "the language of the input file is %s with confidence:%f" %(lan,1-reference_score)
+        if reference_score < 0.2:
+            print "The language of input : %s \n is %s with confidence:%f" % (input,lan, 1 - reference_score)
         else:
             # print similarity_scores
-            print "the language most likely to be %s with confidence:%f" %(lan,1-reference_score)
-            # print "It may not be the following languages :%s" % "English,French,Finnish,Norwegian,Swedish,German,Chinese,Japanese"
+            print "The language of input : %s \n most likely to be %s with confidence:%f" % (input,lan, 1 - reference_score)
+
+        return lan,reference_score
+
+    
+def testNgram(ngram=3,testSentences="",infile=""):
+    print "Test NGram class!"
+    en = NGram('./english.txt', n=ngram)
+    # NB fr and some others have English license text.
+    #   no has english excerpts.
+    fr = NGram('./french.txt', n=ngram)
+    fi = NGram('./Finnish.txt', n=ngram)
+    no = NGram('./Norwegian.txt', n=ngram)
+    se = NGram('./Swedish.txt', n=ngram)
+    no2 = NGram('./Norwegian.txt', n=ngram)
+    en2 = NGram('./english2.txt', n=ngram)
+    fr2 = NGram('./French2.txt', n=ngram)
+    de = NGram("./German.txt", n=ngram)
+    de2 = NGram("./German2.txt", n=ngram)
+    zh = NGram("./Chinese.txt", n=ngram)
+    zh2 = NGram("./Chinese2.txt", n=ngram)
+    ja = NGram("./Japanese.txt", n=ngram)
+    print "calculating difference:"
+    print "English - German is %s" % (en - de)
+    print "German - English is %s" % (de - en)
+    print "German - German2 is %s" % (de - de2)
+    print "German - Chinese is %s" % (de - zh)
+    print "English - Chinese is %s" % (en - zh)
+    print "Chinese - Chinese2 is %s" % (zh - zh2)
+    print "Chinese - Japanese is %s" % (zh - ja)
+    print "English - Japanese is %s" % (en - ja)
+    print "English - French is %s" % (en - fr)
+    print "English - English2 is %s" % (en - en2)
+    print "English - French2 is %s" % (en - fr2)
+    print "French - English2 is %s" % (fr - en2)
+    print "French - French2 is %s" % (fr - fr2)
+    print "French2 - English2 is %s" % (fr2 - en2)
+    print "Finnish - French  is %s" % (fi - fr)
+    print "Finnish - English  is %s" % (fi - en)
+    print "Finnish - Swedish  is %s" % (fi - se)
+    print "Norwegian - Swedish  is %s" % (no - se)
+    print "English - Norwegian  is %s" % (en - no)
+    print "Norwegian - Norwegian2  is %s" % (no - no2)
+    print "Swedish - Norwegian2  is %s" % (se - no2)
+    print "English - Norwegian2  is %s" % (en - no2)
+    print "French - Norwegian2  is %s" % (fr - no2)
+
+    lanModel = languageDetectionModel(ngram)
+    if infile:
+        lanModel.find_match(infile, "file")
+    if testSentences:
+        lanModel.find_match(testSentences, "text")
 
 
-def test():
-    print "Test the language detection performance!"
+
+
+
+def testTrigram():
+    print "Test Trigram class"
     en = Trigram('./english.txt')
-   #NB fr and some others have English license text.
+    # NB fr and some others have English license text.
     #   no has english excerpts.
     fr = Trigram('./french.txt')
     fi = Trigram('./Finnish.txt')
@@ -221,17 +295,13 @@ def test():
 
     print "\nmaking up English"
     print en.makeWords(30)
-    print "\nmaking up French"
-    print fr.makeWords(30)
+    print "\nmaking up German"
+    print de2.makeWords(30)
 
 
 if __name__ == '__main__':
-    test()
+    # testTrigram()
+    ngram=3
+    testSentences = "How did you get on? Great. If you want to hear more about this topic, please visit our website bbclearningenglish.com. That's about it from the pronunciation workshop this week. Bye bye."    
     infile = "./testFile.txt"
-    testSentences = "以新西兰英语为例，也可从其它日期目录查找新西兰英语，如果日期的文件不存在 ，我们可以选择最近文章"
-    lanModel = languageDetectionModel()
-    lanModel.testInput(infile,"file")
-    lanModel.testInput(testSentences, "text")
-
-
-    
+    testNgram(ngram,testSentences,infile)
