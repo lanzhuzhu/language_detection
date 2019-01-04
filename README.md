@@ -10,17 +10,17 @@ This technique makes use of statistics of particular combination of bytes that l
 
   Pass the text, file or link to the NGram class to build a n-gram language model.
 
-  . >>>  ref_en = NGram(fn="./path to reference text in English", ttype="file", n=3)
+   >>>  ref_en = NGram(fn="./path to reference text in English", ttype="file", n=3)
 
-  .>>>   ref_zh = NGram(fn="./path to reference text in Chinese", ttype="file", n=3)
+  >>>   ref_zh = NGram(fn="./path to reference text in Chinese", ttype="file", n=3)
 
-  .>>>   ref_en - ref_zh 
+  >>>   ref_en - ref_zh 
 
   0.994491469601
 
-  .>>>    lanModel = languageDetectionModel(ngram=3)
+  >>>    lanModel = languageDetectionModel(ngram=3)
 
-  .>>>   lanModel.find_match("./path to unknown text", "file")
+  >>>   lanModel.find_match("./path to unknown text", "file")
 
   predicted language, confidence score
 
